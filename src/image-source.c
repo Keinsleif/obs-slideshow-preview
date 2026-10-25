@@ -12,6 +12,20 @@
 #define info(format, ...) blog(LOG_INFO, format, ##__VA_ARGS__)
 #define warn(format, ...) blog(LOG_WARNING, format, ##__VA_ARGS__)
 
+#if LIBOBS_API_MAJOR_VER >= 33
+#define SP_IMG(p) (*(p))
+#define SP_MEM(p) ((p)->mem_usage)
+#else
+typedef gs_image_file4_t gs_image_file_ex_t;
+#define gs_image_file_ex_init           gs_image_file4_init
+#define gs_image_file_ex_init_texture   gs_image_file4_init_texture
+#define gs_image_file_ex_free           gs_image_file4_free
+#define gs_image_file_ex_tick           gs_image_file4_tick
+#define gs_image_file_ex_update_texture gs_image_file4_update_texture
+#define SP_IMG(p) ((p)->image3.image2.image)
+#define SP_MEM(p) ((p)->image3.image2.mem_usage)
+#endif
+
 struct sp_image_source {
 	obs_source_t *source;
 
@@ -69,7 +83,7 @@ static void image_source_load_texture(void *data)
 	gs_image_file_ex_init_texture(&context->image);
 	obs_leave_graphics();
 
-	if (!context->image.loaded)
+	if (!SP_IMG(&context->image).loaded)
 		warn("failed to load texture '%s'", context->file);
 
 	context->update_time_elapsed = 0;
@@ -149,10 +163,10 @@ static void restart_gif(void *data)
 {
 	struct sp_image_source *context = data;
 
-	if (context->image.is_animated_gif) {
-		context->image.cur_frame = 0;
-		context->image.cur_loop = 0;
-		context->image.cur_time = 0;
+	if (SP_IMG(&context->image).is_animated_gif) {
+		SP_IMG(&context->image).cur_frame = 0;
+		SP_IMG(&context->image).cur_loop = 0;
+		SP_IMG(&context->image).cur_time = 0;
 
 		obs_enter_graphics();
 		gs_image_file_ex_update_texture(&context->image);
@@ -192,13 +206,13 @@ static void image_source_destroy(void *data)
 static uint32_t image_source_getwidth(void *data)
 {
 	struct sp_image_source *context = data;
-	return context->image.cx;
+	return SP_IMG(&context->image).cx;
 }
 
 static uint32_t image_source_getheight(void *data)
 {
 	struct sp_image_source *context = data;
-	return context->image.cy;
+	return SP_IMG(&context->image).cy;
 }
 
 static void image_source_render(void *data, gs_effect_t *effect)
@@ -208,7 +222,7 @@ static void image_source_render(void *data, gs_effect_t *effect)
 		return;
 
 	gs_image_file_ex_t *const image = &context->image;
-	gs_texture_t *const texture = image->texture;
+	gs_texture_t *const texture = SP_IMG(image).texture;
 	if (!texture)
 		return;
 
@@ -221,7 +235,7 @@ static void image_source_render(void *data, gs_effect_t *effect)
 	gs_eparam_t *const param = gs_effect_get_param_by_name(effect, "image");
 	gs_effect_set_texture_srgb(param, texture);
 
-	gs_draw_sprite(texture, 0, image->cx, image->cy);
+	gs_draw_sprite(texture, 0, SP_IMG(image).cx, SP_IMG(image).cy);
 
 	gs_blend_state_pop();
 
@@ -255,7 +269,7 @@ static void image_source_tick(void *data, float seconds)
 
 	if (obs_source_showing(context->source)) {
 		if (!context->active) {
-			if (context->image.is_animated_gif)
+			if (SP_IMG(&context->image).is_animated_gif)
 				context->last_time = frame_time;
 
 			context->active = true;
@@ -273,7 +287,7 @@ static void image_source_tick(void *data, float seconds)
 		return;
 	}
 
-	if (context->last_time && context->image.is_animated_gif) {
+	if (context->last_time && SP_IMG(&context->image).is_animated_gif) {
 		uint64_t elapsed = frame_time - context->last_time;
 		bool updated = gs_image_file_ex_tick(&context->image, elapsed);
 
@@ -321,7 +335,7 @@ static obs_properties_t *image_source_properties(void *data)
 uint64_t image_source_get_memory_usage(void *data)
 {
 	struct sp_image_source *s = data;
-	return s->image.mem_usage;
+	return SP_MEM(&s->image);
 }
 
 static void missing_file_callback(void *src, const char *new_path, void *data)
@@ -362,7 +376,7 @@ static enum gs_color_space image_source_get_color_space(void *data, size_t count
 
 	struct sp_image_source *const s = data;
 	gs_image_file_ex_t *const image = &s->image;
-	return image->texture ? image->space : GS_CS_SRGB;
+	return SP_IMG(image).texture ? image->space : GS_CS_SRGB;
 }
 
 struct obs_source_info sp_image_source_info = {
