@@ -38,7 +38,7 @@
     },
     "name": "slideshow-preview",
     "displayName": "OBS Slideshow Preview",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "author": "Keinsleif",
     "website": "https://github.com/Keinsleif/obs-slideshow-preview",
     "email": "mountaindull@gmail.com"
