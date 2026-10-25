@@ -29,6 +29,7 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 
 	signal_handler_t *gsh = obs_get_signal_handler();
 	signal_handler_connect(gsh, "source_create", onSourceListChanged, this);
+	signal_handler_connect(gsh, "source_remove", onSourceListChanged, this);
 	signal_handler_connect(gsh, "source_destroy", onSourceListChanged, this);
 	signal_handler_connect(gsh, "source_rename", onSourceListChanged, this);
 
@@ -50,8 +51,13 @@ void NextPreviewDock::refreshSources()
 		combo->clear();
 		obs_enum_sources(
 			[](void *p, obs_source_t *s) -> bool {
-				if (strcmp(obs_source_get_id(s), "sp_slideshow") == 0)
-					static_cast<QComboBox *>(p)->addItem(QString::fromUtf8(obs_source_get_name(s)));
+				if (obs_source_removed(s))
+					return true;                 // 削除済み(破棄待ち)は一覧に出さない
+
+				/* ここは今の sp_slideshow 判定のまま */
+				if (strcmp(obs_source_get_unversioned_id(s), "sp_slideshow") == 0)
+					static_cast<QComboBox *>(p)->addItem(
+						QString::fromUtf8(obs_source_get_name(s)));
 				return true;
 			},
 			combo);
@@ -165,6 +171,7 @@ NextPreviewDock::~NextPreviewDock()
 {
 	signal_handler_t *gsh = obs_get_signal_handler();
 	signal_handler_disconnect(gsh, "source_create", onSourceListChanged, this);
+	signal_handler_disconnect(gsh, "source_remove", onSourceListChanged, this);
 	signal_handler_disconnect(gsh, "source_destroy", onSourceListChanged, this);
 	signal_handler_disconnect(gsh, "source_rename", onSourceListChanged, this);
 	detach();
