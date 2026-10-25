@@ -1183,7 +1183,6 @@ static enum gs_color_space ss_video_get_color_space(void *data, size_t count,
 
 struct obs_source_info sp_slideshow_info = {
 	.id = "sp_slideshow",
-	.version = 2,
 	.type = OBS_SOURCE_TYPE_INPUT,
 	.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_COMPOSITE |
 			OBS_SOURCE_CONTROLLABLE_MEDIA,
