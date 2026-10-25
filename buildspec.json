@@ -37,7 +37,7 @@
         }
     },
     "name": "slideshow-preview",
-    "displayName": "Add Slideshow source with Preview",
+    "displayName": "OBS Slideshow Preview",
     "version": "0.0.1",
     "author": "Keinsleif",
     "website": "https://github.com/Keinsleif/obs-slideshow-preview",
