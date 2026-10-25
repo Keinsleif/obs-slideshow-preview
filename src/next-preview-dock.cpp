@@ -52,15 +52,17 @@ void NextPreviewDock::refreshSources()
 		obs_enum_sources(
 			[](void *p, obs_source_t *s) -> bool {
 				if (strcmp(obs_source_get_id(s), "sp_slideshow") == 0)
-					static_cast<QComboBox *>(p)->addItem(
-						QString::fromUtf8(obs_source_get_name(s)));
+					static_cast<QComboBox *>(p)->addItem(QString::fromUtf8(obs_source_get_name(s)));
 				return true;
 			},
 			combo);
-		combo->setCurrentIndex(combo->findText(current));
+
+		int idx = combo->findText(current);
+		if (idx < 0 && combo->count() > 0)
+			idx = 0; // 見つからなければ先頭を選ぶ
+		combo->setCurrentIndex(idx);
 	}
 
-	// 選択が変わった(消えた・リネームされた)場合は付け替える
 	if (combo->currentText() != current)
 		onComboChanged(combo->currentIndex());
 }
