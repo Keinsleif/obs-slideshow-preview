@@ -32,6 +32,12 @@ if(ENABLE_QT)
     ${CMAKE_PROJECT_NAME}
     PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON
   )
+  if(APPLE)
+    set_target_properties(
+      ${CMAKE_PROJECT_NAME}
+      PROPERTIES AUTOMOC_COMPILER_PREDEFINES OFF
+    )
+  endif()
 endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.cpp src/image-source.c src/slideshow-preview.c src/next-preview-dock.cpp src/next-preview-dock.hpp)
