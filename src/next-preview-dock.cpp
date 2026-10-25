@@ -25,8 +25,7 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	layout->addWidget(image, 1);
 	layout->addWidget(info);
 
-	connect(combo, &QComboBox::currentIndexChanged, this,
-		&NextPreviewDock::onComboChanged);
+	connect(combo, &QComboBox::currentIndexChanged, this, &NextPreviewDock::onComboChanged);
 
 	signal_handler_t *gsh = obs_get_signal_handler();
 	signal_handler_connect(gsh, "source_create", onSourceListChanged, this);
@@ -83,8 +82,7 @@ void NextPreviewDock::attach(const QString &name)
 	if (!src)
 		return;
 
-	signal_handler_connect(obs_source_get_signal_handler(src),
-			       "slide_changed", onSlideChanged, this);
+	signal_handler_connect(obs_source_get_signal_handler(src), "slide_changed", onSlideChanged, this);
 	weak = obs_source_get_weak_source(src);
 
 	// 初期表示:次のスライドをプロシージャで取得
@@ -103,8 +101,7 @@ void NextPreviewDock::detach()
 		return;
 
 	if (obs_source_t *src = obs_weak_source_get_source(weak)) {
-		signal_handler_disconnect(obs_source_get_signal_handler(src),
-					  "slide_changed", onSlideChanged, this);
+		signal_handler_disconnect(obs_source_get_signal_handler(src), "slide_changed", onSlideChanged, this);
 		obs_source_release(src);
 	}
 	obs_weak_source_release(weak);
@@ -121,11 +118,9 @@ void NextPreviewDock::onSlideChanged(void *param, calldata_t *cd)
 
 	const char *next = nullptr;
 	calldata_get_string(cd, "next_path", &next);
-	QString path = QString::fromUtf8(next ? next : "");  // 即座にコピー
+	QString path = QString::fromUtf8(next ? next : ""); // 即座にコピー
 
-	QMetaObject::invokeMethod(
-		self, [self, path]() { self->showImage(path); },
-		Qt::QueuedConnection);
+	QMetaObject::invokeMethod(self, [self, path]() { self->showImage(path); }, Qt::QueuedConnection);
 }
 
 void NextPreviewDock::showImage(const QString &path)
@@ -138,7 +133,7 @@ void NextPreviewDock::showImage(const QString &path)
 	}
 
 	QImageReader reader(path);
-	reader.setAutoTransform(true);          // EXIF の回転を反映
+	reader.setAutoTransform(true); // EXIF の回転を反映
 	QImage img = reader.read();
 
 	if (img.isNull()) {
@@ -157,8 +152,7 @@ void NextPreviewDock::updateScaled()
 {
 	if (original.isNull())
 		return;
-	image->setPixmap(original.scaled(image->size(), Qt::KeepAspectRatio,
-					 Qt::SmoothTransformation));
+	image->setPixmap(original.scaled(image->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 
 void NextPreviewDock::resizeEvent(QResizeEvent *e)

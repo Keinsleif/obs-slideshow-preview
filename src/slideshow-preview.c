@@ -254,8 +254,7 @@ static const char *peek_next_path(struct slideshow_data *ssd)
 		return NULL;
 
 	/* 自動再生・一巡のみ・最後のスライドなら、これ以上進まない */
-	if (!ssd->manual && !ssd->randomize && !ssd->loop &&
-	    as->cur.slide_idx == ssd->files.num - 1)
+	if (!ssd->manual && !ssd->randomize && !ssd->loop && as->cur.slide_idx == ssd->files.num - 1)
 		return NULL;
 
 	struct source_data *nx = deque_data(&as->next, 0);
@@ -282,11 +281,11 @@ static void do_transition(void *data, bool to_null)
 	}
 
 	if (valid && !to_null) {
-	    const char *next = peek_next_path(ssd);
+		const char *next = peek_next_path(ssd);
 
-        calldata_set_int(&ssd->cd, "index", ssd->slides.cur.slide_idx);
+		calldata_set_int(&ssd->cd, "index", ssd->slides.cur.slide_idx);
 		calldata_set_string(&ssd->cd, "path", ssd->slides.cur.path);
-	    calldata_set_string(&ssd->cd, "next_path", next ? next : "");
+		calldata_set_string(&ssd->cd, "next_path", next ? next : "");
 
 		signal_handler_t *sh = obs_source_get_signal_handler(ss->source);
 		signal_handler_signal(sh, "slide_changed", &ssd->cd);
@@ -837,17 +836,17 @@ static void *ss_create(obs_data_t *settings, obs_source_t *source)
 						     obs_module_text("SP_SlideShow.NextSlide"), next_slide_hotkey, ss);
 
 	ss->prev_hotkey = obs_hotkey_register_source(source, "SP_SlideShow.PreviousSlide",
-						     obs_module_text("SP_SlideShow.PreviousSlide"), previous_slide_hotkey,
-						     ss);
+						     obs_module_text("SP_SlideShow.PreviousSlide"),
+						     previous_slide_hotkey, ss);
 
 	proc_handler_add(ph, "void current_index(out int current_index)", current_slide_proc, ss);
 	proc_handler_add(ph, "void total_files(out int total_files)", total_slides_proc, ss);
-    proc_handler_add(ph, "void next_path(out string next_path)", next_path_proc, ss);
+	proc_handler_add(ph, "void next_path(out string next_path)", next_path_proc, ss);
 
-    signal_handler_t *sh = obs_source_get_signal_handler(ss->source);
-    signal_handler_add(sh, "void slide_changed(int index, string path, string next_path)");
+	signal_handler_t *sh = obs_source_get_signal_handler(ss->source);
+	signal_handler_add(sh, "void slide_changed(int index, string path, string next_path)");
 
-    obs_source_update(source, NULL);
+	obs_source_update(source, NULL);
 
 	UNUSED_PARAMETER(settings);
 	return ss;
