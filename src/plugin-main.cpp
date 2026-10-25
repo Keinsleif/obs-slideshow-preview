@@ -25,8 +25,8 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 extern "C" {
-	extern struct obs_source_info sp_image_source_info;
-	extern struct obs_source_info sp_slideshow_info;
+extern struct obs_source_info sp_image_source_info;
+extern struct obs_source_info sp_slideshow_info;
 }
 
 bool obs_module_load(void)
@@ -38,10 +38,8 @@ bool obs_module_load(void)
 	obs_frontend_add_event_callback(
 		[](enum obs_frontend_event e, void *) {
 			if (e == OBS_FRONTEND_EVENT_FINISHED_LOADING)
-				obs_frontend_add_dock_by_id(
-					"sp_next_preview",
-					obs_module_text("NextSlide"),
-					new NextPreviewDock());
+				obs_frontend_add_dock_by_id("sp_next_preview", obs_module_text("NextSlide"),
+							    new NextPreviewDock());
 		},
 		nullptr);
 
