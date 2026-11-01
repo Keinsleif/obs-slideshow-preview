@@ -35,13 +35,7 @@ bool obs_module_load(void)
 	obs_register_source(&sp_image_source_info);
 	obs_register_source(&sp_slideshow_info);
 
-	obs_frontend_add_event_callback(
-		[](enum obs_frontend_event e, void *) {
-			if (e == OBS_FRONTEND_EVENT_FINISHED_LOADING)
-				obs_frontend_add_dock_by_id("sp_next_preview", obs_module_text("NextSlide"),
-							    new NextPreviewDock());
-		},
-		nullptr);
+	obs_frontend_add_dock_by_id("sp_next_preview", obs_module_text("NextSlide"), new NextPreviewDock());
 
 	return true;
 }
