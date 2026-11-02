@@ -28,20 +28,33 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	image->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
 
 	auto *layout = new QVBoxLayout(this);
-	layout->addWidget(combo);
+	auto *topRow = new QHBoxLayout;
+	topRow->addWidget(combo, 1);
+	layout->addLayout(topRow);
 	layout->addWidget(image, 1);
 	layout->addWidget(info);
 
 	btnRow = new QWidget;
 	auto *row = new QHBoxLayout(btnRow);
 	row->setContentsMargins(0, 0, 0, 0);
-	prevBtn = new QPushButton(obs_module_text("PrevSlideButton"));
-	nextBtn = new QPushButton(obs_module_text("NextSlideButton"));
+	row->setSpacing(2);
+	prevBtn = new QPushButton;
+	nextBtn = new QPushButton;
+	// OBS 標準のメディアコントロールと同じテーマ定義のアイコンを使う
+	prevBtn->setProperty("class", "icon-media-prev");
+	nextBtn->setProperty("class", "icon-media-next");
+	for (QPushButton *btn : {prevBtn, nextBtn}) {
+		btn->setFlat(true);
+		btn->setIconSize(QSize(20, 20));
+		btn->setFixedSize(combo->sizeHint().height(), combo->sizeHint().height());
+	}
+	prevBtn->setToolTip(obs_module_text("PrevSlideButton"));
+	nextBtn->setToolTip(obs_module_text("NextSlideButton"));
 	prevBtn->setEnabled(false);
 	nextBtn->setEnabled(false);
 	row->addWidget(prevBtn);
 	row->addWidget(nextBtn);
-	layout->addWidget(btnRow);
+	topRow->addWidget(btnRow);
 
 	connect(prevBtn, &QPushButton::clicked, this, [this] { callSlide(false); });
 	connect(nextBtn, &QPushButton::clicked, this, [this] { callSlide(true); });
