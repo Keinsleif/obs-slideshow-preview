@@ -2,12 +2,19 @@
 
 #include <QComboBox>
 #include <QLabel>
+#include <QPushButton>
+#include <QHBoxLayout>
+#include <QMenu>
+#include <QAction>
 #include <QVBoxLayout>
 #include <QImageReader>
 #include <QFileInfo>
 
 #include <obs-module.h>
 #include <obs-frontend-api.h>
+
+static const char *CONFIG_SECTION = "SlideshowPreview";
+static const char *CONFIG_SHOW_BUTTONS = "ShowNavButtons";
 
 NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 {
@@ -25,6 +32,35 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	layout->addWidget(image, 1);
 	layout->addWidget(info);
 
+	btnRow = new QWidget;
+	auto *row = new QHBoxLayout(btnRow);
+	row->setContentsMargins(0, 0, 0, 0);
+	prevBtn = new QPushButton(obs_module_text("PrevSlideButton"));
+	nextBtn = new QPushButton(obs_module_text("NextSlideButton"));
+	prevBtn->setEnabled(false);
+	nextBtn->setEnabled(false);
+	row->addWidget(prevBtn);
+	row->addWidget(nextBtn);
+	layout->addWidget(btnRow);
+
+	connect(prevBtn, &QPushButton::clicked, this, [this] { callSlide(false); });
+	connect(nextBtn, &QPushButton::clicked, this, [this] { callSlide(true); });
+
+	// 右クリックで操作ボタンの表示/非表示を切り替える
+	setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+		QMenu menu(this);
+		QAction *act = menu.addAction(obs_module_text("ShowNavButtons"));
+		act->setCheckable(true);
+		act->setChecked(!btnRow->isHidden());
+		connect(act, &QAction::toggled, this, &NextPreviewDock::setButtonsVisible);
+		menu.exec(mapToGlobal(pos));
+	});
+
+	config_t *cfg = obs_frontend_get_user_config();
+	config_set_default_bool(cfg, CONFIG_SECTION, CONFIG_SHOW_BUTTONS, true);
+	btnRow->setVisible(config_get_bool(cfg, CONFIG_SECTION, CONFIG_SHOW_BUTTONS));
+
 	connect(combo, &QComboBox::currentIndexChanged, this, &NextPreviewDock::onComboChanged);
 
 	signal_handler_t *gsh = obs_get_signal_handler();
@@ -34,6 +70,27 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	signal_handler_connect(gsh, "source_rename", onSourceListChanged, this);
 
 	refreshSources();
+}
+
+void NextPreviewDock::setButtonsVisible(bool visible)
+{
+	btnRow->setVisible(visible);
+	config_t *cfg = obs_frontend_get_user_config();
+	config_set_bool(cfg, CONFIG_SECTION, CONFIG_SHOW_BUTTONS, visible);
+	config_save(cfg);
+}
+
+void NextPreviewDock::callSlide(bool next)
+{
+	if (!weak)
+		return;
+	if (obs_source_t *src = obs_weak_source_get_source(weak)) {
+		if (next)
+			obs_source_media_next(src);
+		else
+			obs_source_media_previous(src);
+		obs_source_release(src);
+	}
 }
 
 void NextPreviewDock::onSourceListChanged(void *param, calldata_t *)
@@ -89,6 +146,8 @@ void NextPreviewDock::attach(const QString &name)
 
 	signal_handler_connect(obs_source_get_signal_handler(src), "slide_changed", onSlideChanged, this);
 	weak = obs_source_get_weak_source(src);
+	prevBtn->setEnabled(true);
+	nextBtn->setEnabled(true);
 
 	// 初期表示:次のスライドをプロシージャで取得
 	calldata_t cd = {0};
@@ -111,6 +170,9 @@ void NextPreviewDock::detach()
 	}
 	obs_weak_source_release(weak);
 	weak = nullptr;
+
+	prevBtn->setEnabled(false);
+	nextBtn->setEnabled(false);
 
 	original = QPixmap();
 	image->clear();

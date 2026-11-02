@@ -5,6 +5,7 @@
 
 class QComboBox;
 class QLabel;
+class QPushButton;
 
 class NextPreviewDock : public QWidget {
 	Q_OBJECT
@@ -18,12 +19,14 @@ protected:
 private slots:
 	void refreshSources();
 	void onComboChanged(int index);
+	void setButtonsVisible(bool visible);
 
 private:
 	void attach(const QString &name);
 	void detach();
 	void showImage(const QString &path);
 	void updateScaled();
+	void callSlide(bool next);
 
 	static void onSlideChanged(void *param, calldata_t *cd);
 	static void onSourceListChanged(void *param, calldata_t *cd);
@@ -31,6 +34,9 @@ private:
 	QComboBox *combo;
 	QLabel *image;
 	QLabel *info;
+	QPushButton *prevBtn;
+	QPushButton *nextBtn;
+	QWidget *btnRow;
 	QPixmap original;
 	obs_weak_source_t *weak = nullptr;
 };
