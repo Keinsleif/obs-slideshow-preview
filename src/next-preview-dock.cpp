@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QAction>
+#include <QActionGroup>
 #include <QVBoxLayout>
 #include <QImageReader>
 #include <QFileInfo>
@@ -14,7 +15,7 @@
 #include <obs-frontend-api.h>
 
 static const char *CONFIG_SECTION = "SlideshowPreview";
-static const char *CONFIG_SHOW_BUTTONS = "ShowNavButtons";
+static const char *CONFIG_NAV_MODE = "NavButtonMode";
 
 NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 {
@@ -34,45 +35,75 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	layout->addWidget(image, 1);
 	layout->addWidget(info);
 
-	btnRow = new QWidget;
-	auto *row = new QHBoxLayout(btnRow);
-	row->setContentsMargins(0, 0, 0, 0);
-	row->setSpacing(2);
-	prevBtn = new QPushButton;
-	nextBtn = new QPushButton;
-	// OBS 標準のメディアコントロールと同じテーマ定義のアイコンを使う
-	prevBtn->setProperty("class", "icon-media-prev");
-	nextBtn->setProperty("class", "icon-media-next");
-	for (QPushButton *btn : {prevBtn, nextBtn}) {
-		btn->setFlat(true);
-		btn->setIconSize(QSize(20, 20));
-		btn->setFixedSize(combo->sizeHint().height(), combo->sizeHint().height());
-	}
-	prevBtn->setToolTip(obs_module_text("PrevSlideButton"));
-	nextBtn->setToolTip(obs_module_text("NextSlideButton"));
-	prevBtn->setEnabled(false);
-	nextBtn->setEnabled(false);
-	row->addWidget(prevBtn);
-	row->addWidget(nextBtn);
-	topRow->addWidget(btnRow);
+	// 標準版(テキスト)とコンパクト版(アイコン)の2組を作り、表示だけ切り替える
+	auto makeRow = [this](bool compact) {
+		auto *w = new QWidget;
+		auto *h = new QHBoxLayout(w);
+		h->setContentsMargins(0, 0, 0, 0);
+		h->setSpacing(2);
 
-	connect(prevBtn, &QPushButton::clicked, this, [this] { callSlide(false); });
-	connect(nextBtn, &QPushButton::clicked, this, [this] { callSlide(true); });
+		auto *prev = new QPushButton;
+		auto *next = new QPushButton;
+		if (compact) {
+			// OBS 標準のメディアコントロールと同じテーマ定義のアイコンを使う
+			prev->setProperty("class", "icon-media-prev");
+			next->setProperty("class", "icon-media-next");
+			const int size = combo->sizeHint().height();
+			for (QPushButton *btn : {prev, next}) {
+				btn->setFlat(true);
+				btn->setIconSize(QSize(20, 20));
+				btn->setFixedSize(size, size);
+			}
+			prev->setToolTip(obs_module_text("PrevSlideButton"));
+			next->setToolTip(obs_module_text("NextSlideButton"));
+		} else {
+			prev->setText(obs_module_text("PrevSlideButton"));
+			next->setText(obs_module_text("NextSlideButton"));
+		}
+		prev->setEnabled(false);
+		next->setEnabled(false);
 
-	// 右クリックで操作ボタンの表示/非表示を切り替える
+		connect(prev, &QPushButton::clicked, this, [this] { callSlide(false); });
+		connect(next, &QPushButton::clicked, this, [this] { callSlide(true); });
+
+		h->addWidget(prev);
+		h->addWidget(next);
+		navButtons << prev << next;
+		return w;
+	};
+
+	compactRow = makeRow(true);
+	fullRow = makeRow(false);
+	topRow->addWidget(compactRow);
+	layout->addWidget(fullRow);
+
+	// 右クリックで操作ボタンの表示方法を切り替える
 	setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
 		QMenu menu(this);
-		QAction *act = menu.addAction(obs_module_text("ShowNavButtons"));
-		act->setCheckable(true);
-		act->setChecked(!btnRow->isHidden());
-		connect(act, &QAction::toggled, this, &NextPreviewDock::setButtonsVisible);
+		auto *group = new QActionGroup(&menu);
+		const std::pair<NavMode, const char *> items[] = {
+			{NavMode::Hidden, "NavMode.Hidden"},
+			{NavMode::Standard, "NavMode.Standard"},
+			{NavMode::Compact, "NavMode.Compact"},
+		};
+		for (const auto &item : items) {
+			const NavMode m = item.first; // C++17 では構造化束縛をキャプチャできないため
+			QAction *act = menu.addAction(obs_module_text(item.second));
+			act->setCheckable(true);
+			act->setActionGroup(group);
+			act->setChecked(m == navMode);
+			connect(act, &QAction::triggered, this, [this, m] { setNavMode(m); });
+		}
 		menu.exec(mapToGlobal(pos));
 	});
 
 	config_t *cfg = obs_frontend_get_user_config();
-	config_set_default_bool(cfg, CONFIG_SECTION, CONFIG_SHOW_BUTTONS, true);
-	btnRow->setVisible(config_get_bool(cfg, CONFIG_SECTION, CONFIG_SHOW_BUTTONS));
+	config_set_default_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)NavMode::Compact);
+	int mode = (int)config_get_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE);
+	if (mode < (int)NavMode::Hidden || mode > (int)NavMode::Compact)
+		mode = (int)NavMode::Compact;
+	setNavMode((NavMode)mode);
 
 	connect(combo, &QComboBox::currentIndexChanged, this, &NextPreviewDock::onComboChanged);
 
@@ -85,12 +116,21 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	refreshSources();
 }
 
-void NextPreviewDock::setButtonsVisible(bool visible)
+void NextPreviewDock::setNavMode(NavMode mode)
 {
-	btnRow->setVisible(visible);
+	navMode = mode;
+	fullRow->setVisible(mode == NavMode::Standard);
+	compactRow->setVisible(mode == NavMode::Compact);
+
 	config_t *cfg = obs_frontend_get_user_config();
-	config_set_bool(cfg, CONFIG_SECTION, CONFIG_SHOW_BUTTONS, visible);
+	config_set_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)mode);
 	config_save(cfg);
+}
+
+void NextPreviewDock::setNavEnabled(bool enabled)
+{
+	for (QPushButton *btn : navButtons)
+		btn->setEnabled(enabled);
 }
 
 void NextPreviewDock::callSlide(bool next)
@@ -159,8 +199,7 @@ void NextPreviewDock::attach(const QString &name)
 
 	signal_handler_connect(obs_source_get_signal_handler(src), "slide_changed", onSlideChanged, this);
 	weak = obs_source_get_weak_source(src);
-	prevBtn->setEnabled(true);
-	nextBtn->setEnabled(true);
+	setNavEnabled(true);
 
 	// 初期表示:次のスライドをプロシージャで取得
 	calldata_t cd = {0};
@@ -184,8 +223,7 @@ void NextPreviewDock::detach()
 	obs_weak_source_release(weak);
 	weak = nullptr;
 
-	prevBtn->setEnabled(false);
-	nextBtn->setEnabled(false);
+	setNavEnabled(false);
 
 	original = QPixmap();
 	image->clear();
