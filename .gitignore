@@ -24,3 +24,6 @@
 
 # Exclude CMake build number cache
 /cmake/.CMakeBuildNumber
+
+# include mise config
+!mise.toml

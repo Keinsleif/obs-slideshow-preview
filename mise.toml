@@ -1,0 +1,35 @@
+[tools]
+clang-format = "latest"
+cmake = "latest"
+ninja = "latest"
+rust = "stable"
+uv = "latest"
+
+[tasks.clean]
+run = "rm -rf build"
+run_windows = 'powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build }'
+
+[tasks."setup:windows"]
+run = 'cmake -B build --preset {{ env.MISE_CMAKE_PROFILE_OVERWRITE | default(value="windows-x64") }}'
+
+[tasks."setup:macos"]
+run = 'cmake -B build --preset {{ env.MISE_CMAKE_PROFILE_OVERWRITE | default(value="macos") }}'
+
+[tasks."setup:linux"]
+run = 'cmake -B build --preset {{ env.MISE_CMAKE_PROFILE_OVERWRITE | default(value="ubuntu-86_64") }}'
+
+[tasks.setup]
+outputs = ["build/CMakeCache.txt"]
+sources = ["CMakePresets.json", "CMakeLists.txt"]
+run = [
+    { task = "clean" },
+    { task = "setup:{{ os() }}" },
+]
+
+[tasks.build_plugin]
+depends = ["setup"]
+run = "cmake --build build_x64 --config RelWithDebInfo"
+
+[tasks.install_plugin]
+depends = ["build_plugin"]
+run_windows = "cmake --install build_x64 --config RelWithDebInfo --prefix 'C:\\ProgramData\\obs-studio\\plugins\\'"
