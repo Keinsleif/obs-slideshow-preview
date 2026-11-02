@@ -13,6 +13,7 @@
 
 #include <obs-module.h>
 #include <obs-frontend-api.h>
+#include <util/config-file.h>
 
 static const char *CONFIG_SECTION = "SlideshowPreview";
 static const char *CONFIG_NAV_MODE = "NavButtonMode";
