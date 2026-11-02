@@ -100,7 +100,7 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	});
 
 	config_t *cfg = obs_frontend_get_user_config();
-	config_set_default_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)NavMode::Compact);
+	config_set_default_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)NavMode::Hidden);
 	int mode = (int)config_get_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE);
 	if (mode < (int)NavMode::Hidden || mode > (int)NavMode::Compact)
 		mode = (int)NavMode::Compact;
