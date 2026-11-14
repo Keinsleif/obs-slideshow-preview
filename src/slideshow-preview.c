@@ -404,15 +404,9 @@ static struct source_data get_new_source(struct slideshow *ss, struct active_sli
 	return sd;
 }
 
-static void restart_slides(struct slideshow *ss)
+static void restart_slides_at(struct slideshow *ss, size_t start_idx)
 {
 	struct slideshow_data *ssd = &ss->data;
-	size_t start_idx = 0;
-
-	if (ssd->randomize && ssd->files.num > 0) {
-		start_idx = (size_t)rand() % ssd->files.num;
-	}
-
 	struct active_slides new_slides = {0};
 
 	if (ssd->files.num) {
@@ -438,6 +432,18 @@ static void restart_slides(struct slideshow *ss)
 
 	free_active_slides(&ssd->slides);
 	ssd->slides = new_slides;
+}
+
+static void restart_slides(struct slideshow *ss)
+{
+	struct slideshow_data *ssd = &ss->data;
+	size_t start_idx = 0;
+
+	if (ssd->randomize && ssd->files.num > 0) {
+		start_idx = (size_t)rand() % ssd->files.num;
+	}
+
+	restart_slides_at(ss, start_idx);
 }
 
 static void ss_update(void *data, obs_data_t *settings)
@@ -621,6 +627,10 @@ static void ss_update(void *data, obs_data_t *settings)
 		obs_source_media_started(ss->source);
 	}
 
+	/* スライド一覧(ドック)にファイル構成の変更を通知する */
+	calldata_t none = {0};
+	signal_handler_signal(obs_source_get_signal_handler(ss->source), "files_changed", &none);
+
 	obs_data_array_release(array);
 }
 
@@ -794,6 +804,28 @@ static void current_slide_proc(void *data, calldata_t *cd)
 	calldata_set_int(cd, "current_index", ss->data.slides.cur.slide_idx);
 }
 
+static void file_path_proc(void *data, calldata_t *cd)
+{
+	struct slideshow *ss = data;
+	long long idx = calldata_int(cd, "index");
+	const char *p = (idx >= 0 && (size_t)idx < ss->data.files.num) ? ss->data.files.array[idx].path : "";
+	calldata_set_string(cd, "path", p);
+}
+
+/* 指定した番号のスライドへジャンプする */
+static void set_slide_proc(void *data, calldata_t *cd)
+{
+	struct slideshow *ss = data;
+	long long idx = calldata_int(cd, "index");
+
+	if (idx < 0 || (size_t)idx >= ss->data.files.num)
+		return;
+
+	restart_slides_at(ss, (size_t)idx);
+	ss->data.elapsed = 0.0f;
+	do_transition(ss, false);
+}
+
 static void total_slides_proc(void *data, calldata_t *cd)
 {
 	struct slideshow *ss = data;
@@ -842,9 +874,12 @@ static void *ss_create(obs_data_t *settings, obs_source_t *source)
 	proc_handler_add(ph, "void current_index(out int current_index)", current_slide_proc, ss);
 	proc_handler_add(ph, "void total_files(out int total_files)", total_slides_proc, ss);
 	proc_handler_add(ph, "void next_path(out string next_path)", next_path_proc, ss);
+	proc_handler_add(ph, "void file_path(int index, out string path)", file_path_proc, ss);
+	proc_handler_add(ph, "void set_slide(int index)", set_slide_proc, ss);
 
 	signal_handler_t *sh = obs_source_get_signal_handler(ss->source);
 	signal_handler_add(sh, "void slide_changed(int index, string path, string next_path)");
+	signal_handler_add(sh, "void files_changed()");
 
 	obs_source_update(source, NULL);
 

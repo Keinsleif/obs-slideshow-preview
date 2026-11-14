@@ -7,6 +7,9 @@
 #include <QMenu>
 #include <QAction>
 #include <QActionGroup>
+#include <utility>
+#include <QListWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QImageReader>
 #include <QFileInfo>
@@ -17,6 +20,8 @@
 
 static const char *CONFIG_SECTION = "SlideshowPreview";
 static const char *CONFIG_NAV_MODE = "NavButtonMode";
+static const char *CONFIG_LIST_MODE = "SlideListMode";
+static const QSize THUMB_SIZE(96, 54);
 
 NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 {
@@ -78,33 +83,76 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	topRow->addWidget(compactRow);
 	layout->addWidget(fullRow);
 
-	// 右クリックで操作ボタンの表示方法を切り替える
+	// スライド一覧(選択すると、そのスライドへ切り替わる)
+	list = new QListWidget;
+	list->setIconSize(THUMB_SIZE);
+	list->setUniformItemSizes(true);
+	layout->addWidget(list, 1);
+
+	thumbTimer = new QTimer(this);
+	thumbTimer->setSingleShot(true);
+	connect(thumbTimer, &QTimer::timeout, this, &NextPreviewDock::loadNextThumbs);
+
+	// ユーザー操作のときだけ切り替える(プログラムからの選択変更は QSignalBlocker で止める)
+	connect(list, &QListWidget::currentRowChanged, this, [this](int row) {
+		if (row < 0 || !weak)
+			return;
+		if (obs_source_t *src = obs_weak_source_get_source(weak)) {
+			calldata_t cd = {0};
+			calldata_set_int(&cd, "index", row);
+			proc_handler_call(obs_source_get_proc_handler(src), "set_slide", &cd);
+			calldata_free(&cd);
+			obs_source_release(src);
+		}
+	});
+
+	// 右クリックで操作ボタンとスライド一覧の表示方法を切り替える
 	setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
 		QMenu menu(this);
-		auto *group = new QActionGroup(&menu);
-		const std::pair<NavMode, const char *> items[] = {
-			{NavMode::Hidden, "NavMode.Hidden"},
-			{NavMode::Standard, "NavMode.Standard"},
-			{NavMode::Compact, "NavMode.Compact"},
+
+		auto addRadio = [this](QMenu *parent, const char *titleKey,
+				       std::initializer_list<std::pair<int, const char *>> items, int current,
+				       std::function<void(int)> apply) {
+			QMenu *sub = parent->addMenu(obs_module_text(titleKey));
+			auto *group = new QActionGroup(sub);
+			for (const auto &item : items) {
+				const int v = item.first; // C++17 では構造化束縛をキャプチャできないため
+				QAction *act = sub->addAction(obs_module_text(item.second));
+				act->setCheckable(true);
+				act->setActionGroup(group);
+				act->setChecked(v == current);
+				connect(act, &QAction::triggered, this, [apply, v] { apply(v); });
+			}
 		};
-		for (const auto &item : items) {
-			const NavMode m = item.first; // C++17 では構造化束縛をキャプチャできないため
-			QAction *act = menu.addAction(obs_module_text(item.second));
-			act->setCheckable(true);
-			act->setActionGroup(group);
-			act->setChecked(m == navMode);
-			connect(act, &QAction::triggered, this, [this, m] { setNavMode(m); });
-		}
+
+		addRadio(&menu, "NavButtons",
+			 {{(int)NavMode::Hidden, "NavMode.Hidden"},
+			  {(int)NavMode::Standard, "NavMode.Standard"},
+			  {(int)NavMode::Compact, "NavMode.Compact"}},
+			 (int)navMode, [this](int v) { setNavMode((NavMode)v); });
+		addRadio(&menu, "SlideList",
+			 {{(int)ListMode::Hidden, "ListMode.Hidden"},
+			  {(int)ListMode::Names, "ListMode.Names"},
+			  {(int)ListMode::Thumbnails, "ListMode.Thumbnails"}},
+			 (int)listMode, [this](int v) { setListMode((ListMode)v); });
+
 		menu.exec(mapToGlobal(pos));
 	});
 
 	config_t *cfg = obs_frontend_get_user_config();
 	config_set_default_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)NavMode::Hidden);
-	int mode = (int)config_get_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE);
-	if (mode < (int)NavMode::Hidden || mode > (int)NavMode::Compact)
-		mode = (int)NavMode::Compact;
-	setNavMode((NavMode)mode);
+	config_set_default_int(cfg, CONFIG_SECTION, CONFIG_LIST_MODE, (int)ListMode::Hidden);
+
+	int navValue = (int)config_get_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE);
+	if (navValue < (int)NavMode::Hidden || navValue > (int)NavMode::Compact)
+		navValue = (int)NavMode::Compact;
+	setNavMode((NavMode)navValue);
+
+	int listValue = (int)config_get_int(cfg, CONFIG_SECTION, CONFIG_LIST_MODE);
+	if (listValue < (int)ListMode::Hidden || listValue > (int)ListMode::Thumbnails)
+		listValue = (int)ListMode::Thumbnails;
+	setListMode((ListMode)listValue);
 
 	connect(combo, &QComboBox::currentIndexChanged, this, &NextPreviewDock::onComboChanged);
 
@@ -126,6 +174,98 @@ void NextPreviewDock::setNavMode(NavMode mode)
 	config_t *cfg = obs_frontend_get_user_config();
 	config_set_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)mode);
 	config_save(cfg);
+}
+
+void NextPreviewDock::setListMode(ListMode mode)
+{
+	listMode = mode;
+	list->setVisible(mode != ListMode::Hidden);
+	rebuildList(); // Names: アイコンなし / Thumbnails: 読み込み開始
+
+	config_t *cfg = obs_frontend_get_user_config();
+	config_set_int(cfg, CONFIG_SECTION, CONFIG_LIST_MODE, (int)mode);
+	config_save(cfg);
+}
+
+// スライドショーソースから一覧を作り直す
+void NextPreviewDock::rebuildList()
+{
+	QSignalBlocker block(list); // 選択の変更でスライドが切り替わらないようにする
+	thumbTimer->stop();
+	thumbNext = 0;
+	list->clear();
+
+	if (listMode == ListMode::Hidden || !weak)
+		return;
+
+	obs_source_t *src = obs_weak_source_get_source(weak);
+	if (!src)
+		return;
+	proc_handler_t *ph = obs_source_get_proc_handler(src);
+
+	calldata_t cd = {0};
+	proc_handler_call(ph, "total_files", &cd);
+	const long long total = calldata_int(&cd, "total_files");
+	calldata_free(&cd);
+
+	for (long long i = 0; i < total; i++) {
+		calldata_t c = {0};
+		calldata_set_int(&c, "index", i);
+		proc_handler_call(ph, "file_path", &c);
+		const char *p = calldata_string(&c, "path");
+		const QString path = QString::fromUtf8(p ? p : "");
+		calldata_free(&c);
+
+		auto *item = new QListWidgetItem(QFileInfo(path).fileName());
+		item->setData(Qt::UserRole, path);
+		item->setToolTip(path);
+		list->addItem(item);
+	}
+
+	calldata_t cur = {0};
+	proc_handler_call(ph, "current_index", &cur);
+	const int row = (int)calldata_int(&cur, "current_index");
+	calldata_free(&cur);
+	obs_source_release(src);
+
+	selectRow(row);
+
+	if (listMode == ListMode::Thumbnails)
+		thumbTimer->start();
+}
+
+void NextPreviewDock::selectRow(int row)
+{
+	QSignalBlocker block(list);
+	list->setCurrentRow(row);
+	if (QListWidgetItem *it = list->item(row))
+		list->scrollToItem(it);
+}
+
+// UI が固まらないよう、サムネイルは数枚ずつ読み込む
+void NextPreviewDock::loadNextThumbs()
+{
+	for (int n = 0; n < 4 && thumbNext < list->count(); n++, thumbNext++) {
+		QListWidgetItem *it = list->item(thumbNext);
+		QImageReader reader(it->data(Qt::UserRole).toString());
+		QSize size = reader.size();
+		if (size.isValid()) {
+			size.scale(THUMB_SIZE, Qt::KeepAspectRatio);
+			reader.setScaledSize(size); // 縮小デコードで高速化
+		}
+		const QImage img = reader.read();
+		if (!img.isNull())
+			it->setIcon(QPixmap::fromImage(img));
+	}
+
+	if (thumbNext < list->count() && listMode == ListMode::Thumbnails)
+		thumbTimer->start();
+}
+
+void NextPreviewDock::onFilesChanged(void *param, calldata_t *)
+{
+	auto *self = static_cast<NextPreviewDock *>(param);
+	QMetaObject::invokeMethod(self, [self]() { self->rebuildList(); }, Qt::QueuedConnection);
 }
 
 void NextPreviewDock::setNavEnabled(bool enabled)
@@ -199,6 +339,7 @@ void NextPreviewDock::attach(const QString &name)
 		return;
 
 	signal_handler_connect(obs_source_get_signal_handler(src), "slide_changed", onSlideChanged, this);
+	signal_handler_connect(obs_source_get_signal_handler(src), "files_changed", onFilesChanged, this);
 	weak = obs_source_get_weak_source(src);
 	setNavEnabled(true);
 
@@ -210,6 +351,8 @@ void NextPreviewDock::attach(const QString &name)
 	calldata_free(&cd);
 
 	obs_source_release(src);
+
+	rebuildList();
 }
 
 void NextPreviewDock::detach()
@@ -219,12 +362,14 @@ void NextPreviewDock::detach()
 
 	if (obs_source_t *src = obs_weak_source_get_source(weak)) {
 		signal_handler_disconnect(obs_source_get_signal_handler(src), "slide_changed", onSlideChanged, this);
+		signal_handler_disconnect(obs_source_get_signal_handler(src), "files_changed", onFilesChanged, this);
 		obs_source_release(src);
 	}
 	obs_weak_source_release(weak);
 	weak = nullptr;
 
 	setNavEnabled(false);
+	rebuildList(); // weak が空なので一覧が空になる
 
 	original = QPixmap();
 	image->clear();
@@ -238,8 +383,15 @@ void NextPreviewDock::onSlideChanged(void *param, calldata_t *cd)
 	const char *next = nullptr;
 	calldata_get_string(cd, "next_path", &next);
 	QString path = QString::fromUtf8(next ? next : ""); // 即座にコピー
+	const int index = (int)calldata_int(cd, "index");
 
-	QMetaObject::invokeMethod(self, [self, path]() { self->showImage(path); }, Qt::QueuedConnection);
+	QMetaObject::invokeMethod(
+		self,
+		[self, path, index]() {
+			self->showImage(path);
+			self->selectRow(index); // 一覧の選択を現在のスライドに合わせる
+		},
+		Qt::QueuedConnection);
 }
 
 void NextPreviewDock::showImage(const QString &path)

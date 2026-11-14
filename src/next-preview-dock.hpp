@@ -2,13 +2,18 @@
 #include <QWidget>
 #include <QPixmap>
 #include <QList>
+#include <functional>
+#include <initializer_list>
 #include <obs.h>
 
 class QComboBox;
 class QLabel;
 class QPushButton;
+class QListWidget;
+class QTimer;
 
 enum class NavMode { Hidden = 0, Standard = 1, Compact = 2 };
+enum class ListMode { Hidden = 0, Names = 1, Thumbnails = 2 };
 
 class NextPreviewDock : public QWidget {
 	Q_OBJECT
@@ -31,9 +36,14 @@ private:
 	void callSlide(bool next);
 	void setNavMode(NavMode mode);
 	void setNavEnabled(bool enabled);
+	void setListMode(ListMode mode);
+	void rebuildList();
+	void selectRow(int row);
+	void loadNextThumbs();
 
 	static void onSlideChanged(void *param, calldata_t *cd);
 	static void onSourceListChanged(void *param, calldata_t *cd);
+	static void onFilesChanged(void *param, calldata_t *cd);
 
 	QComboBox *combo;
 	QLabel *image;
@@ -42,6 +52,10 @@ private:
 	QWidget *fullRow;                // 情報ラベルの下に置く行
 	QList<QPushButton *> navButtons; // 有効/無効の切替用
 	NavMode navMode = NavMode::Compact;
+	QListWidget *list;
+	QTimer *thumbTimer;
+	int thumbNext = 0;
+	ListMode listMode = ListMode::Hidden;
 	QPixmap original;
 	obs_weak_source_t *weak = nullptr;
 };
