@@ -28,8 +28,8 @@ run = [
 
 [tasks.build_plugin]
 depends = ["setup"]
-run = "cmake --build build_x64 --config RelWithDebInfo"
+run = "cmake --build build --config RelWithDebInfo"
 
 [tasks.install_plugin]
 depends = ["build_plugin"]
-run_windows = "cmake --install build_x64 --config RelWithDebInfo --prefix 'C:\\ProgramData\\obs-studio\\plugins\\'"
+run_windows = "cmake --install build --config RelWithDebInfo --prefix 'C:\\ProgramData\\obs-studio\\plugins\\'"
