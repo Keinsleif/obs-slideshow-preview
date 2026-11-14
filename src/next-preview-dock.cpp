@@ -27,6 +27,7 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 {
 	combo = new QComboBox;
 	image = new QLabel;
+	image->installEventFilter(this);
 	info = new QLabel;
 
 	image->setAlignment(Qt::AlignCenter);
@@ -440,10 +441,12 @@ void NextPreviewDock::updateScaled()
 	image->setPixmap(original.scaled(image->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 
-void NextPreviewDock::resizeEvent(QResizeEvent *e)
+// ボタン行や一覧の表示切替などでラベルの領域が変わったときも、プレビューを追従させる
+bool NextPreviewDock::eventFilter(QObject *obj, QEvent *e)
 {
-	QWidget::resizeEvent(e);
-	updateScaled();
+	if (obj == image && e->type() == QEvent::Resize)
+		updateScaled();
+	return QWidget::eventFilter(obj, e);
 }
 
 NextPreviewDock::~NextPreviewDock()

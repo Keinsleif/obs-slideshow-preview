@@ -22,7 +22,8 @@ public:
 	~NextPreviewDock() override;
 
 protected:
-	void resizeEvent(QResizeEvent *e) override;
+	// プレビュー画像のラベルのリサイズを監視する
+	bool eventFilter(QObject *obj, QEvent *e) override;
 
 private slots:
 	void refreshSources();
