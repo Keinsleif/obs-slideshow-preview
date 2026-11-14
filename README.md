@@ -10,8 +10,8 @@ Follow bellow instructions. Plugin files available in [Releases](https://github.
 
 <https://obsproject.com/kb/plugins-guide>
 
-> In v0.0.1, Linux only supports OBS v32.
+> Currently, Linux only supports OBS v32.
 > Windows and macOS supports only OBS v33 or above.
 >
-> v0.0.1では、Linux版はOBS v32のみをサポートします。
+> 現在、Linux版はOBS v32のみをサポートします。
 > WindowsとmacOSではOBS v33のみをサポートします。
