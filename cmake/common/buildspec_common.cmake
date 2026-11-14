@@ -55,7 +55,13 @@ function(_setup_obs_studio)
   if(OS_WINDOWS)
     set(_cmake_generator "${CMAKE_GENERATOR}")
     set(_cmake_arch "-A ${arch},version=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
-    set(_cmake_extra "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION}" "-DCMAKE_ENABLE_SCRIPTING=OFF" "-DCMAKE_C_FLAGS=/wd4244" "-DCMAKE_CXX_FLAGS=/wd4244")
+    set(
+      _cmake_extra
+      "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION}"
+      "-DCMAKE_ENABLE_SCRIPTING=OFF"
+      "-DCMAKE_C_FLAGS=/wd4244"
+      "-DCMAKE_CXX_FLAGS=/wd4244"
+    )
   elseif(OS_MACOS)
     set(_cmake_generator "Xcode")
     set(_cmake_arch "-DCMAKE_OSX_ARCHITECTURES:STRING='arm64;x86_64'")
@@ -148,8 +154,7 @@ function(_check_dependencies)
 
     if(EXISTS "${dependencies_dir}/.dependency_${dependency}_${arch}.sha256")
       file(
-        READ
-        "${dependencies_dir}/.dependency_${dependency}_${arch}.sha256"
+        READ "${dependencies_dir}/.dependency_${dependency}_${arch}.sha256"
         OBS_DEPENDENCY_${dependency}_${arch}_HASH
       )
     endif()
