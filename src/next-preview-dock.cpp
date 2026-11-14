@@ -106,39 +106,20 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 		}
 	});
 
-	// 右クリックで操作ボタンとスライド一覧の表示方法を切り替える
+	// 歯車ボタンと右クリックの両方から、同じ設定メニューを開く
+	gearBtn = new QPushButton;
+	gearBtn->setProperty("class", "icon-gear"); // OBS 標準の歯車アイコン(テーマ定義)
+	gearBtn->setFlat(true);
+	gearBtn->setIconSize(QSize(16, 16));
+	gearBtn->setFixedSize(combo->sizeHint().height(), combo->sizeHint().height());
+	gearBtn->setToolTip(obs_module_text("DockSettings"));
+	topRow->addWidget(gearBtn);
+	connect(gearBtn, &QPushButton::clicked, this,
+		[this] { showSettingsMenu(gearBtn->mapToGlobal(QPoint(0, gearBtn->height()))); });
+
 	setContextMenuPolicy(Qt::CustomContextMenu);
-	connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
-		QMenu menu(this);
-
-		auto addRadio = [this](QMenu *parent, const char *titleKey,
-				       std::initializer_list<std::pair<int, const char *>> items, int current,
-				       std::function<void(int)> apply) {
-			QMenu *sub = parent->addMenu(obs_module_text(titleKey));
-			auto *group = new QActionGroup(sub);
-			for (const auto &item : items) {
-				const int v = item.first; // C++17 では構造化束縛をキャプチャできないため
-				QAction *act = sub->addAction(obs_module_text(item.second));
-				act->setCheckable(true);
-				act->setActionGroup(group);
-				act->setChecked(v == current);
-				connect(act, &QAction::triggered, this, [apply, v] { apply(v); });
-			}
-		};
-
-		addRadio(&menu, "NavButtons",
-			 {{(int)NavMode::Hidden, "NavMode.Hidden"},
-			  {(int)NavMode::Standard, "NavMode.Standard"},
-			  {(int)NavMode::Compact, "NavMode.Compact"}},
-			 (int)navMode, [this](int v) { setNavMode((NavMode)v); });
-		addRadio(&menu, "SlideList",
-			 {{(int)ListMode::Hidden, "ListMode.Hidden"},
-			  {(int)ListMode::Names, "ListMode.Names"},
-			  {(int)ListMode::Thumbnails, "ListMode.Thumbnails"}},
-			 (int)listMode, [this](int v) { setListMode((ListMode)v); });
-
-		menu.exec(mapToGlobal(pos));
-	});
+	connect(this, &QWidget::customContextMenuRequested, this,
+		[this](const QPoint &pos) { showSettingsMenu(mapToGlobal(pos)); });
 
 	config_t *cfg = obs_frontend_get_user_config();
 	config_set_default_int(cfg, CONFIG_SECTION, CONFIG_NAV_MODE, (int)NavMode::Hidden);
@@ -163,6 +144,39 @@ NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 	signal_handler_connect(gsh, "source_rename", onSourceListChanged, this);
 
 	refreshSources();
+}
+
+void NextPreviewDock::showSettingsMenu(const QPoint &globalPos)
+{
+	QMenu menu(this);
+
+	auto addRadio = [this](QMenu *parent, const char *titleKey,
+			       std::initializer_list<std::pair<int, const char *>> items, int current,
+			       std::function<void(int)> apply) {
+		QMenu *sub = parent->addMenu(obs_module_text(titleKey));
+		auto *group = new QActionGroup(sub);
+		for (const auto &item : items) {
+			const int v = item.first; // C++17 では構造化束縛をキャプチャできないため
+			QAction *act = sub->addAction(obs_module_text(item.second));
+			act->setCheckable(true);
+			act->setActionGroup(group);
+			act->setChecked(v == current);
+			connect(act, &QAction::triggered, this, [apply, v] { apply(v); });
+		}
+	};
+
+	addRadio(&menu, "NavButtons",
+		 {{(int)NavMode::Hidden, "NavMode.Hidden"},
+		  {(int)NavMode::Standard, "NavMode.Standard"},
+		  {(int)NavMode::Compact, "NavMode.Compact"}},
+		 (int)navMode, [this](int v) { setNavMode((NavMode)v); });
+	addRadio(&menu, "SlideList",
+		 {{(int)ListMode::Hidden, "ListMode.Hidden"},
+		  {(int)ListMode::Names, "ListMode.Names"},
+		  {(int)ListMode::Thumbnails, "ListMode.Thumbnails"}},
+		 (int)listMode, [this](int v) { setListMode((ListMode)v); });
+
+	menu.exec(globalPos);
 }
 
 void NextPreviewDock::setNavMode(NavMode mode)

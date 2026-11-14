@@ -36,6 +36,7 @@ private:
 	void callSlide(bool next);
 	void setNavMode(NavMode mode);
 	void setNavEnabled(bool enabled);
+	void showSettingsMenu(const QPoint &globalPos);
 	void setListMode(ListMode mode);
 	void rebuildList();
 	void selectRow(int row);
@@ -52,6 +53,7 @@ private:
 	QWidget *fullRow;                // 情報ラベルの下に置く行
 	QList<QPushButton *> navButtons; // 有効/無効の切替用
 	NavMode navMode = NavMode::Compact;
+	QPushButton *gearBtn;
 	QListWidget *list;
 	QTimer *thumbTimer;
 	int thumbNext = 0;
