@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QImageReader>
+#include <QPainter>
 #include <QFileInfo>
 
 #include <obs-module.h>
@@ -22,6 +23,17 @@ static const char *CONFIG_SECTION = "SlideshowPreview";
 static const char *CONFIG_NAV_MODE = "NavButtonMode";
 static const char *CONFIG_LIST_MODE = "SlideListMode";
 static const QSize THUMB_SIZE(96, 54);
+
+// 縦横比の異なる画像でも、サムネイル列の幅がそろうように、固定サイズの枠の中央に配置する
+static QPixmap makeThumb(const QImage &img, const QSize &box)
+{
+	QPixmap canvas(box);
+	canvas.fill(Qt::transparent);
+	const QPixmap pm = QPixmap::fromImage(img);
+	QPainter painter(&canvas);
+	painter.drawPixmap((box.width() - pm.width()) / 2, (box.height() - pm.height()) / 2, pm);
+	return canvas;
+}
 
 NextPreviewDock::NextPreviewDock(QWidget *parent) : QWidget(parent)
 {
@@ -270,7 +282,7 @@ void NextPreviewDock::loadNextThumbs()
 		}
 		const QImage img = reader.read();
 		if (!img.isNull())
-			it->setIcon(QPixmap::fromImage(img));
+			it->setIcon(makeThumb(img, THUMB_SIZE));
 	}
 
 	if (thumbNext < list->count() && listMode == ListMode::Thumbnails)
